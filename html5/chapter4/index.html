@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>JavaScript Crap</title>
+		<link rel="stylesheet" href="tictactoe.css"/>
+		<script>
+		function showalert() {
+			alert('you clicked me');
+		}
+		function clickme(){
+			document.getElementsByTagName('p')[0].onclick = showalert;
+		}
+		window.onload = clickme
+		</script>
+	</head>
+	<body>
+		<div class="board">
+			<div class="row">
+				<div class="cell" id="00"></div>
+				<div class="cell" id="01"></div>
+				<div class="cell" id="02"></div>
+			</div>
+			<div class="row">
+				<div class="cell" id="10"></div>
+				<div class="cell" id="11"></div>
+				<div class="cell" id="12"></div>
+			</div>
+			<div class="row">
+				<div class="cell" id="20"></div>
+				<div class="cell" id="21"></div>
+				<div class="cell" id="22"></div>
+			</div>
+		</div>
+	</body>
+</html>

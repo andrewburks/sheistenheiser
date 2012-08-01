@@ -1,0 +1,40 @@
+body {
+	text-align: center;
+}
+
+#mainbox {
+	display: block;
+	width: 500px;
+	margin: 50px auto;
+	test-align: center;
+	border: 1px solid #999999;
+	background: #DDDDDD;
+
+	-moz-border-radius: 20px;
+	-webkit-border-radius: 20px;
+	border-bottom: 20px;
+
+	-moz-box-shadow: rgb(150, 150, 150) 5px 5px;
+	-webkit-box-shadow: rgb(150, 150, 150) 5px 5px;
+	box-shadow: rgb(150, 150, 150) 5px 5px;
+
+	background: -webkit-linear-gradient(top, #FFFFFF, #006699);
+	background: -moz-linear-gradient(top, #FFFFFF, #006699);
+
+	-moz-transition: -moz-transform 3s ease-in-out 0.3s;
+	-webkittransition: -webkit-transform 1s ease-in-out 0.5s;
+}
+
+#mainbox:hover {
+	-moz-transform: rotate(15deg);
+	-webkit-transform: rotate(15deg);
+}
+
+#title {
+	font: bold 36px SiteFont, verdana, sans-serif;
+}
+
+@font-face {
+	font-family: 'SiteFont';
+	src: url('../fonts/ubuntu-font-0.80/Ubuntu-B.ttf');
+}
