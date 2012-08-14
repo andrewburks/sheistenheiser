@@ -1,0 +1,26 @@
+@font-face {
+    font-family: 'SiteFont';
+	src: url('../fonts/ubuntu-font-0.80/Ubuntu-M.ttf');
+}
+
+* {
+    margin: 0px;
+    padding: 0px;
+}
+
+body {
+    width: 100%;
+    background: black;
+    
+    display: -webkit-box;
+    -webkit-box-pack: center;
+}
+
+#wrapper {
+    max-width: 960px;
+    margin: 15px 0px;
+
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-box-flex=1;
+}
