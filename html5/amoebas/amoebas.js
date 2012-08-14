@@ -8,7 +8,7 @@ function randomIntInRange(min, max, excludeZero) {
     excludeZero = excludeZero === undefined ? false : true;
     while (true) {
         var x = Math.floor(min + (1 + max - min) * Math.random()); 
-        if (x != 0 || excludeZero !== undefined) {
+        if (x !== 0 || excludeZero !== undefined) {
             return x;
         }
     }
@@ -31,7 +31,7 @@ function sign(n) {
 }
 
 function GameObj(x, y, radius, game) {
-    obj = {};
+    var obj = {};
     obj.x = x;
     obj.y = y;
     obj.radius = radius;
@@ -55,7 +55,7 @@ function GameObj(x, y, radius, game) {
         else {
             this.health += amt;
         }
-    }
+    };
 
     return obj;
 }
@@ -67,7 +67,7 @@ function BGCircle(game) {
         randomIntInRange(Math.min(GAME_WIDTH, GAME_HEIGHT)/2, Math.max(GAME_WIDTH, GAME_HEIGHT)/2), 
         game);
 
-    var alpha = randomFloatInRange(.02, .09);
+    var alpha = randomFloatInRange(0.02, 0.09);
 
     circle.draw = function(canvas) {
         canvas.save();
@@ -145,37 +145,37 @@ function Mote(x, y, game, color, effect) {
 function MoteFactory() {
     var factory = {};
 
-    plus10health = function() {
-        fn = function(target) {
+    var plus10health = function() {
+        var fn = function(target) {
             target.addHealth(10);
-        }
+        };
         fn.duration = 0;
         fn.effectId = "health";
         return fn;
     };
 
-    plus20health = function() {
-        fn = function(target) {
+    var plus20health = function() {
+        var fn = function(target) {
             target.addHealth(20);
-        }
+        };
         fn.duration = 0;
         fn.effectId = "health";
         return fn;
     };
 
-    pain = function() {
-        fn = function(target) {
-            target.addHealth(-10)
-        }
+    var pain = function() {
+        var fn = function(target) {
+            target.addHealth(-10);
+        };
         fn.duration = 0;
         fn.effectId = "pain";
         return fn;
     };
 
-    spikes = function(target){
-        fn = function(target) {
+    var spikes = function(target){
+        var fn = function(target) {
             // TODO how to pull this off?
-        }
+        };
         fn.duration = 8000;
         fn.effectId = "spikes";
         return fn;
@@ -189,7 +189,7 @@ function MoteFactory() {
         ];
 
     factory.createMote = function(game) {
-        effect = randomFromArray(effects); 
+        var effect = randomFromArray(effects); 
         return Mote(
             randomIntInRange(1, GAME_WIDTH -1), 
             randomIntInRange(1, GAME_HEIGHT - 1), 
@@ -238,21 +238,21 @@ function Amoeba(x, y, game) {
         switch (kpe.keyCode) {
             case 38: // up=38
             case 87: // W=87
-                this.momentumMods[kpe.keyCode] = function() { amoeba.mY -= 20 };
+                this.momentumMods[kpe.keyCode] = function() { amoeba.mY -= 20; };
                 break;
             case 40: // down=40
             case 83: // S=83
-                this.momentumMods[kpe.keyCode] = function() { amoeba.mY += 20 };
+                this.momentumMods[kpe.keyCode] = function() { amoeba.mY += 20; };
                 break;
             case 37: // left=37
             case 65: // A=65
-                this.momentumMods[kpe.keyCode] = function() { amoeba.mX -= 20 };
+                this.momentumMods[kpe.keyCode] = function() { amoeba.mX -= 20; };
                 break;
             case 39: // right=39
             case 68: // D=68
-                this.momentumMods[kpe.keyCode] = function() { amoeba.mX += 20 };
+                this.momentumMods[kpe.keyCode] = function() { amoeba.mX += 20; };
                 break;
-        };
+        }
     };
 
     amoeba.onKeyup = function (kpe) {
@@ -275,14 +275,14 @@ function Amoeba(x, y, game) {
     };
 
     amoeba.calc = function() {
-        for (key in this.momentumMods) {
+        for (var key in this.momentumMods) {
             this.momentumMods[key](this);
         }
 
         // Apply active effects
         var expiredEffects = [];
         for (var key in this.activeEffects) {
-            effect = this.activeEffects[key];
+            var effect = this.activeEffects[key];
             if (effect.expires < game.getTime()) {
                 effect(this);
             }
@@ -296,8 +296,8 @@ function Amoeba(x, y, game) {
         }
 
         // Calc position
-        if (this.mX != 0) {
-            var dX = Math.floor(.1 * this.mX);
+        if (this.mX !== 0) {
+            var dX = Math.floor(0.1 * this.mX);
             if (game.isXinbounds(this.x + dX + (sign(this.mX) * this.radius))) {
                 this.mX += -5 * sign(this.mX);
                 this.x += dX;                
@@ -306,8 +306,8 @@ function Amoeba(x, y, game) {
                 this.mX = 0;
             }
         }
-        if (this.mY != 0) {
-            var dY = Math.floor(.1 * this.mY);
+        if (this.mY !== 0) {
+            var dY = Math.floor(0.1 * this.mY);
             if (game.isYinbounds(this.y + dY + (sign(this.mY) * this.radius))) {
                 this.mY += -5 * sign(this.mY);
                 this.y += dY;
@@ -367,8 +367,8 @@ function Bacterium(x, y, game) {
     bact.calc = function() {
         var newDirection = false;
 
-        var dX = .01 * bact.mX;
-        var dY = .01 * bact.mY;
+        var dX = 0.01 * bact.mX;
+        var dY = 0.01 * bact.mY;
 
         if (game.isXinbounds(bact.x + dX + (sign(bact.mX) * bact.radius))) {
             bact.x += dX;
@@ -413,10 +413,10 @@ function Meter(target) {
     meter.calc = function() {
         percentHealth = target.health / target.maxHealth;
 
-        if (percentHealth > .66) {
+        if (percentHealth > 0.66) {
             meterColor = 'rgba(0,255,96,0.4)';        
         }
-        else if(.33 <= percentHealth && percentHealth <= .66) {
+        else if(0.33 <= percentHealth && percentHealth <= 0.66) {
             meterColor = 'rgba(255,255,0,0.4)';    
         }
         else {
@@ -452,7 +452,7 @@ function Meter(target) {
         canvas.fill();
         canvas.stroke();
 
-        drawEye(this, canvas, .78);
+        drawEye(this, canvas, 0.78);
         canvas.restore();
     };
 
@@ -497,7 +497,7 @@ function AmoebaGame(petriDish) {
                 }
             }
         }
-    }
+    };
 
     game.conflict = function(obj1, obj2) {
         obj1.addHealth(-obj2.damage);
@@ -557,7 +557,7 @@ function AmoebaGame(petriDish) {
         if (obj.interactive) {
             this.interactiveObjects.push(obj);
         }
-    }
+    };
 
     game.removeObject = function(obj) {
         garbage.push(obj);
@@ -565,7 +565,7 @@ function AmoebaGame(petriDish) {
 
     game.collectGarbage = function() {
         for (var i in garbage) {
-            obj = garbage[i];
+            var obj = garbage[i];
             sprites = removeObj(sprites, obj);
             if (obj.interactive) {
                 this.interactiveObjects = removeObj(this.interactiveObjects, obj);
@@ -577,7 +577,7 @@ function AmoebaGame(petriDish) {
     game.start = function() {
         // A little less boring background
         for (var i = 0; i < 3; i++) {
-            this.addObject(BGCircle(this))
+            this.addObject(BGCircle(this));
         }
 
         // We need an amoeba
@@ -589,12 +589,12 @@ function AmoebaGame(petriDish) {
         this.loop();
     };
     
-    window.onkeydown = game.onKeydown
-    window.onkeyup = game.onKeyup
+    window.onkeydown = game.onKeydown;
+    window.onkeyup = game.onKeyup;
 
     return game;
 }
 
 window.onload = function() {
     AmoebaGame(document.getElementById("petriDish")).start();
-}
+};
