@@ -1,4 +1,6 @@
+/* This is a little project to help me explore some aspects of HTML5.
 
+*/
 var GAME_WIDTH;
 var GAME_HEIGHT;
 
@@ -346,16 +348,30 @@ function Bacterium(x, y, game) {
     bact.health = 150;
     bact.damage = 7;
     bact.interactive = true;
-    bact.mY = randomFromArray([-100, 100]);
     bact.mX = randomFromArray([-100, 100]);
+    bact.mY = randomFromArray([-100, 100]);
+
+    var maxMomentum = 300;
+    var minMomentum = 100;
+    var canAddMomentumX = true;
+    var canAddMomentumY = true
+    var nearest;
 
     bact.draw = function(canvas) {
         canvas.save();
-        canvas.fillStyle = bact.color;
-        canvas.strokeStyle = bact.strokeStyle;
+
+        if (nearest !== undefined) {
+            canvas.beginPath();
+            canvas.arc(nearest.x, nearest.y, 10, 0, TWO_PI, true);
+            canvas.stroke();
+            canvas.closePath();
+        }
+
+        canvas.fillStyle = this.color;
+        canvas.strokeStyle = this.strokeStyle;
         canvas.lineWidth = 3;
         canvas.beginPath();
-        canvas.arc(bact.x, bact.y, bact.radius, 0, TWO_PI, true);
+        canvas.arc(this.x, this.y, this.radius, 0, TWO_PI, true);
         canvas.closePath();
         canvas.fill();
         canvas.stroke();
@@ -365,29 +381,76 @@ function Bacterium(x, y, game) {
     };
 
     bact.calc = function() {
-        var newDirection = false;
 
-        var dX = 0.01 * bact.mX;
-        var dY = 0.01 * bact.mY;
+        var minDistance;
+        nearest = undefined;
+        for (var x in game.interactiveObjects) {
+            var obj =  game.interactiveObjects[x];
+            if (obj !== this) {
+                var d = Math.sqrt(((obj.x - this.x) * (obj.x - this.x)) + ((obj.y - this.y) * (obj.y - this.y)));
+                if (minDistance === undefined || d < minDistance) {
+                    minDistance = d;
+                    nearest = obj;
+                }
+            }
+        }
 
-        if (game.isXinbounds(bact.x + dX + (sign(bact.mX) * bact.radius))) {
-            bact.x += dX;
+        if (nearest !== undefined) {
+            // TODO cap momentum so this guy doesn't haul ass
+            if (canAddMomentumX) {      
+                this.mX += (nearest.x - this.x) * 0.5;
+                if (Math.abs(this.mX) >= maxMomentum) {
+                    this.mX = maxMomentum * sign(this.mX);
+                    this.canAddMomentumX = false;
+                }
+            }
+
+            if (canAddMomentumY) {
+                this.mY += (nearest.y - this.y) * 0.5;
+                if (Math.abs(this.mY) >= maxMomentum) {
+                    this.mY = maxMomentum * sign(this.mY);
+                    this.canAddMomentumY = false;
+                }
+            }
+
+            this.direction = Math.atan2((nearest.x - this.x), (nearest.y - this.y));
+        }
+
+        var dX = 0.03 * this.mX;
+        var dY = 0.03 * this.mY;
+
+        // Bounce off the walls...
+        if (game.isXinbounds(this.x + dX + (sign(this.mX) * this.radius))) {
+            this.x += dX;
         }
         else {
-            bact.mX = -bact.mX;
-            newDirection = true;
+            this.mX = -this.mX;
         }
         
-        if (game.isYinbounds(bact.y + dY + (sign(bact.mY) * bact.radius))) {
-            bact.y += dY;
+        if (game.isYinbounds(this.y + dY + (sign(this.mY) * this.radius))) {
+            this.y += dY;
         }
         else {
-           bact.mY = -bact.mY;
-           newDirection = true;
+           this.mY = -this.mY;
         }
 
-        if (newDirection) {
-            bact.direction = Math.PI / 180 *Math.atan2(bact.mY - dY, bact.mX - dX);
+        // Reduce momentum
+        var rX = -5 * sign(this.mX);
+        var rY = -5 * sign(this.mY);
+        if (Math.abs(this.mX + rX) > minMomentum) {
+            this.mX += rX;
+        }
+        else {
+            this.mX = minMomentum * sign(this.mX);
+            this.canAddMomentumX = true;
+        }
+
+        if (Math.abs(this.mY + rY) > minMomentum) {
+            this.mY += rY;
+        }
+        else {
+            this.mY = minMomentum * sign(this.mY);
+            this.canAddMomentumY = true;
         }
 
         game.checkConflicts(this);
@@ -430,9 +493,11 @@ function Meter(target) {
         canvas.fillStyle = 'rgba(255,255,255,0.3)';
         canvas.beginPath();
         canvas.moveTo(this.x + radius, this.y);
-        canvas.lineTo(this.x + radius + healthMeterWidth, this.y);
-        canvas.lineTo(this.x + radius + healthMeterWidth, this.y + radius);
+        canvas.lineTo(this.x+ (radius/2) + healthMeterWidth, this.y);
+        // canvas.arc(this.x + healthMeterWidth, this.y + (radius/2), this.radius/2, Math.PI/2, 3*Math.PI/2, true);
+        canvas.lineTo(this.x + (radius/2) + healthMeterWidth, this.y + radius);
         canvas.lineTo(this.x,  this.y + radius);
+        
         canvas.fill();
         canvas.stroke();
 
@@ -452,7 +517,13 @@ function Meter(target) {
         canvas.fill();
         canvas.stroke();
 
-        drawEye(this, canvas, 0.78);
+        canvas.font = '12px verdana, sans-serif';
+        canvas.textAlign = 'start';
+        canvas.textBaseline = 'middle';
+        canvas.fillStyle = 'rgba(0,0,0,.9)';
+        canvas.fillText(target.health + '%', this.x + radius + 5, this.y + (radius/2));
+
+        drawEye(this, canvas, 1.4);
         canvas.restore();
     };
 
@@ -491,9 +562,6 @@ function AmoebaGame(petriDish) {
             if (obj !== aggressor) {
                 if (((obj.x - aggressor.x) * (obj.x - aggressor.x)) + ((obj.y - aggressor.y) * (obj.y - aggressor.y)) <= aggressor.radius * aggressor.radius) {
                     game.conflict(aggressor, obj);
-                }
-                else {
-                    aggressor.color = aggressor.defaultColor;
                 }
             }
         }
