@@ -3,8 +3,14 @@
 */
 var GAME_WIDTH;
 var GAME_HEIGHT;
-
 var TWO_PI = Math.PI * 2;
+
+var Classification = {
+    BACKGROUND: 0,
+    RESOURCE: 1,
+    MONSTER: 3,
+    PLAYER:4
+};
 
 function randomIntInRange(min, max, excludeZero) {
     excludeZero = excludeZero === undefined ? false : true;
@@ -43,20 +49,14 @@ function GameObj(x, y, radius, game) {
     obj.mX = randomIntInRange(-1, 1);
     obj.direction = 0.78;
     obj.effect;
-    obj.interactive = false;
+    obj.classification = Classification.BACKGROUND;
     obj.color = obj.defaultColor = 'rgba(255,255,255,0.8)';
     obj.strokeStyle = obj.defaultStrokeStyle = 'rgb(0,0,0)';
-    obj.maxHealth = 100;
     obj.health = 1;
     obj.damage = 0;
 
     obj.addHealth = function(amt) {
-        if (this.health + amt > this.maxHealth) {
-            this.health = this.maxHealth;
-        }
-        else {
-            this.health += amt;
-        }
+        this.health += amt;
     };
 
     return obj;
@@ -107,7 +107,7 @@ function BGCircle(game) {
 function Mote(x, y, game, color, effect) {
     var mote = GameObj(x, y, 3, game);
 
-    mote.interactive = true;
+    mote.classification = Classification.RESOURCE;
     mote.effect = effect;
     mote.color = typeof color === undefined ? 'rgb(255, 0, 0)' : color;
 
@@ -227,11 +227,11 @@ function drawEye(cgo, canvas, direction) {
 function Amoeba(x, y, game) {
     var amoeba = GameObj(x, y, 20, game);
     amoeba.name = 'Amoeba';
-    amoeba.interactive = true;
+    amoeba.classification = Classification.PLAYER;
     amoeba.defaultColor = 'rgba(0,255,128,0.5)';
     amoeba.color = 'rgba(0,255,128,0.5)';
-    amoeba.health = 100;
-    amoeba.damage = 5;
+    amoeba.health = 150;
+    amoeba.damage = 7;
     amoeba.momentumMods = {};
     amoeba.activeEffects = {};
     amoeba.mX = amoeba.mY = 0;
@@ -319,6 +319,8 @@ function Amoeba(x, y, game) {
             }
         }
 
+        this.radius = 10 + this.health * .10;
+
         this.direction = Math.atan2(this.mX, this.mY);
 
         game.checkConflicts(this);
@@ -347,7 +349,7 @@ function Bacterium(x, y, game) {
     bact.maxHealth = 150;
     bact.health = 150;
     bact.damage = 7;
-    bact.interactive = true;
+    bact.classification = Classification.MONSTER;
     bact.mX = randomFromArray([-100, 100]);
     bact.mY = randomFromArray([-100, 100]);
 
@@ -361,8 +363,9 @@ function Bacterium(x, y, game) {
         canvas.save();
 
         if (nearest !== undefined) {
+            // DEBUGGING...
             canvas.beginPath();
-            canvas.arc(nearest.x, nearest.y, 10, 0, TWO_PI, true);
+            canvas.arc(nearest.x, nearest.y, nearest.radius + 10, 0, TWO_PI, true);
             canvas.stroke();
             canvas.closePath();
         }
@@ -452,6 +455,8 @@ function Bacterium(x, y, game) {
             this.mY = minMomentum * sign(this.mY);
             this.canAddMomentumY = true;
         }
+
+        this.radius = 10 + this.health * .10;
 
         game.checkConflicts(this);
     };
@@ -567,17 +572,22 @@ function AmoebaGame(petriDish) {
         }
     };
 
-    game.conflict = function(obj1, obj2) {
-        obj1.addHealth(-obj2.damage);
-        obj2.addHealth(-obj1.damage);
+    game.conflict = function(combatant1, combatant2) {
+        // TODO - calculate a weight advantage for larger combatants
 
-        if (obj1.health <= 0 && obj2.health > 0) {
-            obj2.addEffect(obj1.effect);
-            this.removeObject(obj1);
+        var winner = combatant1;
+        var loser = combatant2;
+
+        if (combatant2.classification !== Classification.RESOURCE && Math.random() > 0.5) {
+            winner = combatant2;
+            loser = combatant1;
         }
-        else if (obj2.health <= 0 && obj1.health > 0) {
-            obj1.addEffect(obj2.effect);
-            this.removeObject(obj2);
+
+        winner.addHealth(winner.damage);
+        loser.addHealth(-winner.damage);
+        if (loser.health <= 0) {
+            winner.addEffect(loser.effect);
+            this.removeObject(loser)
         }
     };
 
@@ -622,7 +632,7 @@ function AmoebaGame(petriDish) {
     
     game.addObject = function(obj) {
         sprites.push(obj);
-        if (obj.interactive) {
+        if (obj.classification > Classification.BACKGROUND) {
             this.interactiveObjects.push(obj);
         }
     };
@@ -635,7 +645,7 @@ function AmoebaGame(petriDish) {
         for (var i in garbage) {
             var obj = garbage[i];
             sprites = removeObj(sprites, obj);
-            if (obj.interactive) {
+            if (obj.classification > Classification.BACKGROUND) {
                 this.interactiveObjects = removeObj(this.interactiveObjects, obj);
             }            
         }
@@ -643,12 +653,10 @@ function AmoebaGame(petriDish) {
     };
 
     game.start = function() {
-        // A little less boring background
         for (var i = 0; i < 3; i++) {
             this.addObject(BGCircle(this));
         }
 
-        // We need an amoeba
         amoeba = Amoeba(100, 100, this);
         this.addObject(amoeba);
         this.addObject(Meter(amoeba));
