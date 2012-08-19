@@ -1,83 +1,131 @@
-/* This is a little project to help me explore some aspects of HTML5.
 
-*/
+// It's just plain silly that the javascript Array doesn't already have this functionality.
+Array.prototype.remove = function (obj) {
+    for (var i = this.length - 1; i >= 0; i--) {
+        if (this[i] === obj) {
+            this.splice(i, 1);
+            break;
+        }
+    };
+};
+
+Array.prototype.removeAll = function (objs) {
+    for (var i = 0; i < objs.length; i++) {
+        this.remove(objs[i]);
+    };
+};
+
+// An Array customization for this game. Sometimes I'll want to pick some random 
+// value from an Array.
+Array.prototype.random = function (obj) {
+    return this[Math.floor(this.length * Math.random())];
+};
+
+function randomInt(lowerBound, upperBound) {
+    return Math.floor(lowerBound + (1 + upperBound - lowerBound) * Math.random()); 
+}
+
+function randomFloat(lowerBound, upperBound) {
+    return lowerBound + (upperBound - lowerBound) * Math.random();
+}
+
+function sign(i) {
+    return i === 0 ? 1 : i / Math.abs(i);
+}
+
+// Globals are generally a no no if I recall... but I honestly can't think of why they would 
+// be in this case... 
 var GAME_WIDTH;
 var GAME_HEIGHT;
 var TWO_PI = Math.PI * 2;
+var DIRECTION = [-1, 1];
 
 var Classification = {
     BACKGROUND: 0,
     RESOURCE: 1,
-    MONSTER: 3,
-    PLAYER:4
+    MONSTER: 2,
+    PLAYER: 3
 };
 
-function randomIntInRange(min, max, excludeZero) {
-    excludeZero = excludeZero === undefined ? false : true;
-    while (true) {
-        var x = Math.floor(min + (1 + max - min) * Math.random()); 
-        if (x !== 0 || excludeZero !== undefined) {
-            return x;
-        }
-    }
+// The idea here is to pull the colors, strokes, gradients, etc. out of the game logic and write
+// something that just applies a theme to a canvas.  This will allow things like effects to apply 
+// or override the visual representation of the game objects.
+var DefaultTheme = {
+    fillStyle: 'rgba(255,255,255,0.8)',
+    strokeStyle: 'rgb(0,0,0)'
+};
+
+var BGCircleTheme = {
+    fillStyle: 'rgba(255, 255, 255, 0.04)',
+    shadowColor: 'rgba(255, 255, 255, 1.0)',
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    shadowBlur: 5
 }
 
-function randomFromArray(array) {
-    return array[randomIntInRange(0, array.length-1, false)];
-}
+var AmoebaTheme = {
+    fillStyle: 'rgba(0,255,128,0.5)',
+    strokeStyle: 'rgb(0,0,0)',
+    lineWidth: 3
+};
 
-function randomFloatInRange(min, max) {
-    return min + (max - min) * Math.random();
-}
+var BacteriumTheme = {
+    fillStyle: 'rgba(128,0,255,0.7)',
+    strokeStyle: 'rgb(0,0,0)',
+    lineWidth: 3
+};
 
-function removeObj(array, obj) {
-    return array.slice(0, array.indexOf(obj)).concat(array.slice(array.indexOf(obj) + 1, array.length));
-}
-
-function sign(n) {
-    return n === 0 ? 1 : n / Math.abs(n);
-}
-
+// This is the base class for game objects like the player's amoeba, the enemy bacteria, and the various 
+// resource motes that bounce around.
 function GameObj(x, y, radius, game) {
     var obj = {};
     obj.x = x;
     obj.y = y;
     obj.radius = radius;
     obj.game = game;
-    obj.name = 'unnamed';
-    obj.mY = randomIntInRange(-1, 1);
-    obj.mX = randomIntInRange(-1, 1);
+    obj.name = 'Un-named';
+    obj.mY = DIRECTION.random();
+    obj.mX = DIRECTION.random();
     obj.direction = 0.78;
     obj.effect;
     obj.classification = Classification.BACKGROUND;
-    obj.color = obj.defaultColor = 'rgba(255,255,255,0.8)';
-    obj.strokeStyle = obj.defaultStrokeStyle = 'rgb(0,0,0)';
     obj.health = 1;
     obj.damage = 0;
+    obj.theme = DefaultTheme;
 
     obj.addHealth = function(amt) {
         this.health += amt;
     };
 
+    obj.calc = function () {
+    };
+
+    obj.draw = function (canvas) {
+    };
+
+    obj.applyTheme = function (canvas) {
+        for (var property in this.theme) {
+            canvas[property] = this.theme[property];
+        }
+    };
+
     return obj;
 }
 
+// The background was immensely boring, so I put something back there to make it less uncool. 
 function BGCircle(game) {
     var circle = GameObj(
         Math.random() * GAME_WIDTH, 
         Math.random() * GAME_HEIGHT, 
-        randomIntInRange(Math.min(GAME_WIDTH, GAME_HEIGHT)/2, Math.max(GAME_WIDTH, GAME_HEIGHT)/2), 
+        randomInt(Math.min(GAME_WIDTH, GAME_HEIGHT)/2, Math.max(GAME_WIDTH, GAME_HEIGHT)/2), 
         game);
 
-    var alpha = randomFloatInRange(0.02, 0.09);
+    var alpha = randomFloat(0.02, 0.09);
+    circle.theme = BGCircleTheme;
 
     circle.draw = function(canvas) {
         canvas.save();
-        canvas.fillStyle = 'rgba(255, 255, 255, ' + alpha + ')';
-        canvas.shadowColor = 'rgba(255, 255, 255, 1.0)';
-        canvas.shadowOffsetX = 0;
-        canvas.shadowOffsetY = 0;
-        canvas.shadowBlur = 5;
+        this.applyTheme(canvas);
         canvas.beginPath();
         canvas.arc(this.x, this.y, this.radius, 0, TWO_PI, true);
         canvas.closePath();
@@ -104,6 +152,100 @@ function BGCircle(game) {
     return circle;
 }
 
+
+// Effects are things that can happen to an object.  Get some health, lose some, grow spikes, get a shield...
+function Effect(game) {
+    effect = {};
+    effect.name = '???';
+    effect.target;
+
+    var step = 10;
+    var lastStep;
+
+    effect.r = 0;
+    effect.g = 0;
+    effect.b = 0;
+
+    effect.apply = function () {
+    };
+
+    effect.setTarget = function (target) {
+        this.target = target;
+    }
+
+    effect.draw = function (canvas) {
+        var now = game.getTime();
+        if (lastStep === undefined) {
+            lastStep = game.getTime();
+        }
+        else if (now - lastStep > 100) {
+            step -= 1;
+            lastStep = now;
+        }
+
+        canvas.font = 'bold 20px verdana, sans-serif';
+        canvas.fillStyle = 'rgba(' + this.r + ',' + this.g + ',' + this.b + ',' + (1.0 * step / 10) + ')';
+        canvas.textAlign = 'center';
+        canvas.textBaseline = 'bottom';
+        canvas.fillText(this.name, this.target.x, this.target.y - this.target.radius);
+    };
+
+    effect.isActive = function () {
+        return step > 0;
+    }
+
+    return effect;
+}
+
+function HealingEffect(game) {
+    effect = Effect(game);
+
+    effect.health = randomInt(3, 25);
+    var applied = false;
+
+    effect.name = '+' + effect.health;
+    effect.g = 200;
+
+    effect.apply = function () {
+        if (!applied) {
+            this.target.addHealth(this.health);
+            applied = true;
+        }
+    };
+
+    return effect;
+}
+
+function HarmingEffect(game) {
+    effect = HealingEffect(game);
+
+    effect.health = -randomInt(3, 25);
+    effect.name = effect.health;
+    effect.g = 0;
+    effect.r = 200;
+
+    return effect;
+}
+
+function ShieldEffect(game) {
+    effect = Effect(game);
+    effect.name = 'Shield!';
+    return effect;    
+}
+
+function SpikesEffect(game) {
+    effect = Effect(game);
+    effect.name = 'Spikes!';
+    return effect;    
+}
+
+function VictoriousEffect(game) {
+    effect = Effect(game);
+    effect.name = 'Victorious!';
+    return effect;        
+}
+
+// Motes are the little things that float around the game that can be eaten, they carry an Effect...
 function Mote(x, y, game, color, effect) {
     var mote = GameObj(x, y, 3, game);
 
@@ -144,64 +286,29 @@ function Mote(x, y, game, color, effect) {
     return mote;
 }
 
+// Produces a mote of random type when asked for one.
 function MoteFactory() {
     var factory = {};
-
-    var plus10health = function() {
-        var fn = function(target) {
-            target.addHealth(10);
-        };
-        fn.duration = 0;
-        fn.effectId = "health";
-        return fn;
-    };
-
-    var plus20health = function() {
-        var fn = function(target) {
-            target.addHealth(20);
-        };
-        fn.duration = 0;
-        fn.effectId = "health";
-        return fn;
-    };
-
-    var pain = function() {
-        var fn = function(target) {
-            target.addHealth(-10);
-        };
-        fn.duration = 0;
-        fn.effectId = "pain";
-        return fn;
-    };
-
-    var spikes = function(target){
-        var fn = function(target) {
-            // TODO how to pull this off?
-        };
-        fn.duration = 8000;
-        fn.effectId = "spikes";
-        return fn;
-    };
-
     var effects = [
-            ['rgb(255,   0,   0)', pain()],
-            ['rgb(0,   255,   0)', plus10health()],
-            ['rgb(0,     0, 255)', plus20health()],
-            ['rgb(128,   0, 255)', spikes()]
+            ['rgb(255,   0,   0)', HarmingEffect],
+            ['rgb(0,   255,   0)', HealingEffect],
+            ['rgb(0,     0, 255)', ShieldEffect],
+            ['rgb(255, 255, 255)', SpikesEffect]
         ];
 
     factory.createMote = function(game) {
-        var effect = randomFromArray(effects); 
+        var effect = effects.random(); 
         return Mote(
-            randomIntInRange(1, GAME_WIDTH -1), 
-            randomIntInRange(1, GAME_HEIGHT - 1), 
+            randomInt(1, GAME_WIDTH -1), 
+            randomInt(1, GAME_HEIGHT - 1), 
             game, 
             effect[0],
-            effect[1]);
+            effect[1](game));
     };
 
     return factory;
 }
+
 
 function drawEye(cgo, canvas, direction) {
     var eX = cgo.x + Math.round(Math.sin(direction) * 10);
@@ -224,17 +331,49 @@ function drawEye(cgo, canvas, direction) {
     canvas.stroke();
 }
 
+// Shared logic for being affected by effects for use in both amoebas and bateriums
+function EffectedGameObj(x, y, radius, game) {
+    var sgo = GameObj(x, y, radius, game);
+    sgo.activeEffects = [];
+
+    sgo.addEffect = function(effect) {
+        effect.setTarget(this);
+        this.activeEffects.push(effect);
+    };
+
+    sgo.drawEffects = function (canvas) {
+        for (var i = 0; i < this.activeEffects.length; i++) {
+            this.activeEffects[i].draw(canvas);
+        }
+    }
+
+    sgo.calcEffects = function () {
+        var expiredEffects = [];
+        for (var i = 0; i < this.activeEffects.length; i++) {
+            effect = this.activeEffects[i];
+            if (effect.isActive()) {
+                effect.apply();
+            }
+            else {
+                expiredEffects.push(effect);
+            }
+        };
+        this.activeEffects.removeAll(expiredEffects);
+    }
+
+    return sgo;
+}
+
 function Amoeba(x, y, game) {
-    var amoeba = GameObj(x, y, 20, game);
+    var amoeba = EffectedGameObj(x, y, 20, game);
     amoeba.name = 'Amoeba';
     amoeba.classification = Classification.PLAYER;
-    amoeba.defaultColor = 'rgba(0,255,128,0.5)';
-    amoeba.color = 'rgba(0,255,128,0.5)';
     amoeba.health = 150;
     amoeba.damage = 7;
     amoeba.momentumMods = {};
-    amoeba.activeEffects = {};
     amoeba.mX = amoeba.mY = 0;
+    amoeba.effect = VictoriousEffect(game);
+    amoeba.theme = AmoebaTheme;
 
     amoeba.onKeydown = function (kpe) {
         switch (kpe.keyCode) {
@@ -263,9 +402,7 @@ function Amoeba(x, y, game) {
 
     amoeba.draw = function(canvas) {
         canvas.save();
-        canvas.fillStyle = this.color;
-        canvas.strokeStyle = this.strokeStyle;
-        canvas.lineWidth = 3;
+        this.applyTheme(canvas);
         canvas.beginPath();
         canvas.arc(this.x, this.y, this.radius, 0, TWO_PI, true);
         canvas.closePath();
@@ -273,28 +410,15 @@ function Amoeba(x, y, game) {
         canvas.stroke();
 
         drawEye(this, canvas, this.direction);
+
+        this.drawEffects(canvas);
+
         canvas.restore();
     };
 
     amoeba.calc = function() {
         for (var key in this.momentumMods) {
             this.momentumMods[key](this);
-        }
-
-        // Apply active effects
-        var expiredEffects = [];
-        for (var key in this.activeEffects) {
-            var effect = this.activeEffects[key];
-            if (effect.expires < game.getTime()) {
-                effect(this);
-            }
-            else {
-                expiredEffects.push(key);
-            }
-        }
-
-        for (var key in expiredEffects) {
-            delete this.activeEffects[expiredEffects[key]];
         }
 
         // Calc position
@@ -319,39 +443,30 @@ function Amoeba(x, y, game) {
             }
         }
 
-        this.radius = 10 + this.health * .10;
+        this.radius = 10 + this.health * 0.10;
 
         this.direction = Math.atan2(this.mX, this.mY);
 
         game.checkConflicts(this);
-    };
 
-    amoeba.addEffect = function(effect) {
-        if (effect) {
-            if (effect.duration > 0) {
-                this.activeEffects[effect.effectId] = effect;
-                effect.expires = effect.duration + game.getTime();
-            }
-            else {
-                effect(this);    
-            }
-        }
+        this.calcEffects();
     };
 
     return amoeba;
 }
 
+
 function Bacterium(x, y, game) {
-    var bact = GameObj(x, y, 20, game);
+    var bact = EffectedGameObj(x, y, 20, game);
     bact.name = 'Bacterium';
-    bact.defaultColor = 'rgba(128,0,255,0.7)';
-    bact.color = 'rgba(128,0,255,0.7)';
     bact.maxHealth = 150;
     bact.health = 150;
     bact.damage = 7;
     bact.classification = Classification.MONSTER;
-    bact.mX = randomFromArray([-100, 100]);
-    bact.mY = randomFromArray([-100, 100]);
+    bact.mX = DIRECTION.random() * 100;
+    bact.mY = DIRECTION.random() * 100;
+    bact.effect = VictoriousEffect(game);
+    bact.theme = BacteriumTheme;
 
     var maxMomentum = 300;
     var minMomentum = 100;
@@ -362,17 +477,15 @@ function Bacterium(x, y, game) {
     bact.draw = function(canvas) {
         canvas.save();
 
+        // DEBUGGING...
         if (nearest !== undefined) {
-            // DEBUGGING...
             canvas.beginPath();
             canvas.arc(nearest.x, nearest.y, nearest.radius + 10, 0, TWO_PI, true);
             canvas.stroke();
             canvas.closePath();
         }
 
-        canvas.fillStyle = this.color;
-        canvas.strokeStyle = this.strokeStyle;
-        canvas.lineWidth = 3;
+        this.applyTheme(canvas);
         canvas.beginPath();
         canvas.arc(this.x, this.y, this.radius, 0, TWO_PI, true);
         canvas.closePath();
@@ -380,11 +493,13 @@ function Bacterium(x, y, game) {
         canvas.stroke();
 
         drawEye(this, canvas, this.direction);
+
+        this.drawEffects(canvas);
+
         canvas.restore();
     };
 
     bact.calc = function() {
-
         var minDistance;
         nearest = undefined;
         for (var x in game.interactiveObjects) {
@@ -459,12 +574,8 @@ function Bacterium(x, y, game) {
         this.radius = 10 + this.health * .10;
 
         game.checkConflicts(this);
-    };
 
-    bact.addEffect = function(effect) {
-        if (effect) {
-            effect(this);
-        }
+        this.calcEffects();
     };
 
     return bact;
@@ -535,17 +646,18 @@ function Meter(target) {
     return meter;
 }
 
-function AmoebaGame(petriDish) {
+function AmoebaGame(viewPort) {
     var game = {};
-    var canvas = petriDish.getContext('2d');
-    GAME_WIDTH = petriDish.width;
-    GAME_HEIGHT = petriDish.height;
+    var canvas = viewPort.getContext('2d');
+    GAME_WIDTH = viewPort.width;
+    GAME_HEIGHT = viewPort.height;
 
     var amoeba;
     var sprites = [];
     var garbage = [];
     var moteFactory = MoteFactory(game);
     var nextMoteTime = 0;
+    var currentTime;
 
     game.interactiveObjects = [];
 
@@ -558,7 +670,7 @@ function AmoebaGame(petriDish) {
     };
 
     game.getTime = function() {
-        return new Date().getTime();
+        return currentTime;
     };
 
     game.checkConflicts = function (aggressor) {
@@ -572,23 +684,33 @@ function AmoebaGame(petriDish) {
         }
     };
 
-    game.conflict = function(combatant1, combatant2) {
+    game.conflict = function(aggressor, defender) {
+        // NOTE: Only MONSTERs and PLAYERs initiate conflict and are therefore the aggressor
+
         // TODO - calculate a weight advantage for larger combatants
 
-        var winner = combatant1;
-        var loser = combatant2;
-
-        if (combatant2.classification !== Classification.RESOURCE && Math.random() > 0.5) {
-            winner = combatant2;
-            loser = combatant1;
+        if (defender.classification === Classification.RESOURCE) {
+            aggressor.addEffect(defender.effect);
+            this.removeObject(defender);            
         }
+        else {
+            var winner = aggressor;
+            var loser = defender;
 
-        winner.addHealth(winner.damage);
-        loser.addHealth(-winner.damage);
-        if (loser.health <= 0) {
-            winner.addEffect(loser.effect);
-            this.removeObject(loser)
-        }
+            if (Math.random() > 0.5) {
+                winner = defender;
+                loser = aggressor;
+            }
+
+            var win = HealingEffect(this);
+            win.health = winner.damage;
+
+            var loss = HarmingEffect(this);
+            loss.health = -winner.damage;
+
+            winner.addEffect(win);
+            loser.addEffect(loss);
+        } 
     };
 
     game.onKeydown = function (kpe) {
@@ -610,21 +732,31 @@ function AmoebaGame(petriDish) {
     };
     
     game.loop = function() {
+        // Update game time
+        currentTime = new Date().getTime();
+
+        // Make all the sprites calculations
         for (var i = 0; i < sprites.length; i++) {
             sprites[i].calc();
         }
 
+        // Add some resources...
         if (nextMoteTime < game.getTime()) {
             game.addObject(moteFactory.createMote(game));
-            nextMoteTime = game.getTime() + randomIntInRange(7, 17) * 500;
+            nextMoteTime = game.getTime() + randomInt(7, 17) * 500;
         }
 
+        // Clears the canvas
         game.clear();
         
+        // Redraw all the sprites on the newly cleared canvas
         for (var i = 0; i < sprites.length; i++) {
             sprites[i].draw(canvas);
         }
 
+        // Ran into an issue of removing an object from an array while I was iterating 
+        // through it... I presumed it was a concurrent modification style snafu, so I 
+        // put this GC part in to avoid weird concurrent modification 
         game.collectGarbage();
 
         setTimeout(game.loop, 1000 / 50);
@@ -644,9 +776,9 @@ function AmoebaGame(petriDish) {
     game.collectGarbage = function() {
         for (var i in garbage) {
             var obj = garbage[i];
-            sprites = removeObj(sprites, obj);
+            sprites.remove(obj);
             if (obj.classification > Classification.BACKGROUND) {
-                this.interactiveObjects = removeObj(this.interactiveObjects, obj);
+                this.interactiveObjects.remove(obj);
             }            
         }
         garbage = [];
@@ -659,7 +791,7 @@ function AmoebaGame(petriDish) {
 
         amoeba = Amoeba(100, 100, this);
         this.addObject(amoeba);
-        this.addObject(Meter(amoeba));
+        // this.addObject(Meter(amoeba));
         this.addObject(Bacterium(GAME_WIDTH - 100, GAME_HEIGHT - 100, this));
 
         this.loop();
@@ -672,5 +804,5 @@ function AmoebaGame(petriDish) {
 }
 
 window.onload = function() {
-    AmoebaGame(document.getElementById("petriDish")).start();
+    AmoebaGame(document.getElementById("viewPort")).start();
 };

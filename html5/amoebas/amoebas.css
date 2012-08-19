@@ -1,6 +1,6 @@
 @font-face {
-    font-family: 'SiteFont';
-	src: url('../fonts/ubuntu-font-0.80/Ubuntu-M.ttf');
+    font-family: 'Ubuntu';
+	src: url('../fonts/ubuntu-font-0.80/Ubuntu-L.ttf');
 }
 
 * {
@@ -11,9 +11,15 @@
 body {
     width: 100%;
     background: black;
+    color: white;
+    font: 14px Ubuntu, verdana, sans-serif;
     
     display: -webkit-box;
     -webkit-box-pack: center;
+}
+
+h1 {
+    font: bold 18px Ubuntu, verdana, sans-serif;    
 }
 
 #wrapper {
