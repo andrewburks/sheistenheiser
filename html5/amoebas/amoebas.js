@@ -158,9 +158,9 @@ function BGCircle(game) {
 
 // Effects are things that can happen to an object.  Get some health, lose some, grow spikes, get a shield...
 // Some effects can stack up and some cancel others out...
-function Effect(game, name) {
+function Effect(game) {
     effect = {};
-    effect.name = name === undefined ? '???' : name;
+    effect.name = '???';
     effect.canStack = true;
     effect.isEffectFilter = false;
     effect.isNullifying = false;
@@ -213,16 +213,19 @@ function Effect(game, name) {
         return step > 0;
     };
 
+    effect.copyProperties = function (otherEffect) {
+    };
+
     return effect;
 }
 
 function HealingEffect(game, health) {
-    var health = (health === undefined) ? randomInt(3, 25) : health;
-
-    effect = Effect(game, '+' + health);
-    effect.health = health;
-    var applied = false;
+    effect = Effect(game);
+    effect.health = (health === undefined) ? randomInt(3, 25) : health;
+    effect.name = '+' + effect.health;
     effect.g = 200;
+    
+    var applied = false;
 
     effect.apply = function () {
         if (!applied) {
@@ -236,7 +239,6 @@ function HealingEffect(game, health) {
 
 function DamageEffect(game, health) {
     effect = HealingEffect(game);
-
     effect.health = (health === undefined) ? -randomInt(3, 25) : -Math.abs(health);
     effect.name = effect.health;
     effect.g = 0;
@@ -292,9 +294,9 @@ function ShieldEffect(game) {
     return effect;    
 }
 
-function BlockedEffect (game, effect) {
+function BlockedEffect (game, blockedEffect) {
     effect = Effect(game);
-    effect.name = 'Blocked ' + effect.name;
+    effect.name = 'Blocked ' + blockedEffect.name;
     effect.isNullifying = true;
     return effect;
 }
@@ -305,17 +307,18 @@ function SpikesEffect(game) {
     effect.canStack = true;
 
     var expires = game.getTime() + 7000;
-    var prevDamage;
+
+    effect.prevDamage;
 
     effect.setTarget = function (target) {
         this.target = target;
         this.prevDamage = target.damage;
-        target.damage *= 4;
+        target.damage *= 3;
     };
 
     effect.isActive = function () {
         if (expires <= game.getTime()) {
-            this.target.damage = prevDamage;
+            this.target.damage = this.prevDamage;
             return false;
         }
         return true;
@@ -342,6 +345,10 @@ function SpikesEffect(game) {
             canvas.stroke();
             canvas.closePath();
         }
+    };
+
+    effect.copyProperties = function (otherEffect) {
+        this.prevDamage = otherEffect.prevDamage;
     };
 
     return effect;    
@@ -454,6 +461,7 @@ function EffectedGameObj(x, y, radius, game) {
         if (!effect.canStack) {
             for (var i = this.activeEffects.length - 1; i >= 0; i--) {
                 if (this.activeEffects[i].name === effect.name) {
+                    effect.copyProperties(this.activeEffects[i]);
                     this.activeEffects.remove(this.activeEffects[i]);
                     break;
                 }
@@ -485,6 +493,10 @@ function EffectedGameObj(x, y, radius, game) {
             }
         };
         this.activeEffects.removeAll(expiredEffects);
+    };
+
+    sgo.clearActiveEffects = function () {
+        this.activeEffects.length = 0;    
     };
 
     return sgo;
@@ -524,6 +536,11 @@ function Amoeba(x, y, game) {
 
     amoeba.onKeyup = function (kpe) {
         delete this.momentumMods[kpe.keyCode];        
+    };
+
+    amoeba.reset = function () {
+        this.health = 150;
+        this.damage = 7;
     };
 
     amoeba.draw = function(canvas) {
@@ -630,7 +647,7 @@ function Bacterium(x, y, game) {
         nearest = undefined;
         for (var x in game.interactiveObjects) {
             var obj =  game.interactiveObjects[x];
-            if (obj !== this) {
+            if (obj !== this && obj.classification != Classification.MONSTER) {
                 var d = Math.sqrt(((obj.x - this.x) * (obj.x - this.x)) + ((obj.y - this.y) * (obj.y - this.y)));
                 if (minDistance === undefined || d < minDistance) {
                     minDistance = d;
@@ -707,70 +724,50 @@ function Bacterium(x, y, game) {
     return bact;
 }
 
-// function Meter(target) {
-//     var radius = 15;
-//     var meter = GameObj(radius + 3, GAME_HEIGHT - (3 + radius),  radius, undefined);
+function ScoreBoard (player, game) {
+    var board = GameObj(3, 3, 1, game);
 
-//     var healthMeterWidth = 200;
-//     var percentHealth = 100;
-//     var meterColor = 'rgba(0,255,96,0.4)';
+    var totalScore = 0;
 
-//     meter.calc = function() {
-//         percentHealth = target.health / target.maxHealth;
+    board.addScore = function (score) {
+        totalScore += score;
+    }; 
 
-//         if (percentHealth > 0.66) {
-//             meterColor = 'rgba(0,255,96,0.4)';        
-//         }
-//         else if(0.33 <= percentHealth && percentHealth <= 0.66) {
-//             meterColor = 'rgba(255,255,0,0.4)';    
-//         }
-//         else {
-//             meterColor = 'rgba(255,0,0,0.4)';
-//         }
-//     };
+    board.draw = function (canvas) {
+        canvas.font = 'bold italic 16px verdana, sans-serif';
+        canvas.fillStyle = 'rgba(0,0,0,0.7)';
+        canvas.textAlign = 'left';
+        canvas.textBaseline = 'top';
 
-//     meter.draw = function(canvas) {
-//         canvas.save();
-//         canvas.lineWidth = 2;
-//         canvas.fillStyle = 'rgba(255,255,255,0.3)';
-//         canvas.beginPath();
-//         canvas.moveTo(this.x + radius, this.y);
-//         canvas.lineTo(this.x+ (radius/2) + healthMeterWidth, this.y);
-//         // canvas.arc(this.x + healthMeterWidth, this.y + (radius/2), this.radius/2, Math.PI/2, 3*Math.PI/2, true);
-//         canvas.lineTo(this.x + (radius/2) + healthMeterWidth, this.y + radius);
-//         canvas.lineTo(this.x,  this.y + radius);
-        
-//         canvas.fill();
-//         canvas.stroke();
+        var scoreMsg = 'Score: ' + totalScore;
 
-//         canvas.beginPath();
-//         canvas.moveTo(this.x + (radius/2), this.y + (radius/2));
-//         canvas.lineTo(this.x + (radius/2) + (percentHealth * healthMeterWidth), this.y + (radius/2));
-//         canvas.lineWidth = radius - 4;
-//         canvas.strokeStyle = meterColor;
-//         canvas.stroke();
+        canvas.fillText(scoreMsg, this.x, this.y);
+    };
 
-//         canvas.lineWidth = 2;
-//         canvas.fillStyle = target.color;
-//         canvas.strokeStyle = target.strokeStyle;
-//         canvas.beginPath();
-//         canvas.arc(this.x, this.y, this.radius, 0, TWO_PI, true);
-//         canvas.closePath();
-//         canvas.fill();
-//         canvas.stroke();
+    return board;
+}
 
-//         canvas.font = '12px verdana, sans-serif';
-//         canvas.textAlign = 'start';
-//         canvas.textBaseline = 'middle';
-//         canvas.fillStyle = 'rgba(0,0,0,.9)';
-//         canvas.fillText(target.health + '%', this.x + radius + 5, this.y + (radius/2));
 
-//         drawEye(this, canvas, 1.4);
-//         canvas.restore();
-//     };
+function GameMessage(game, text, duration) {
+    var message = GameObj(GAME_WIDTH/2, GAME_HEIGHT/2, 0, game);
 
-//     return meter;
-// }
+    var expires = game.getTime() + duration;
+
+    message.isActive = function() {
+        return game.getTime() > expires;
+    };
+
+    message.draw = function (canvas) {
+        canvas.font = 'bold italic 24px verdana, sans-serif';
+        canvas.fillStyle = 'rgba(0,0,0,0.9)';
+        canvas.textAlign = 'center';
+        canvas.textBaseline = 'middle';
+        canvas.fillText(text, this.x, this.y);        
+    };   
+
+    return message;
+}
+
 
 function AmoebaGame(viewPort) {
     var game = {};
@@ -778,13 +775,22 @@ function AmoebaGame(viewPort) {
     GAME_WIDTH = viewPort.width;
     GAME_HEIGHT = viewPort.height;
 
+    var scoreBoard;
     var amoeba;
     var monsters = [];
+    var maxMonsters = 1;
     var sprites = [];
     var garbage = [];
     var moteFactory = MoteFactory(game);
     var nextMoteTime = 0;
     var currentTime;
+
+    var roundSetupStage = 0;
+    var currentMessage;
+    var messages = [
+        ["Hmmm...", "Brilliant!", "Uhh... Okay...", "Fine."],
+        ["I guess that was too easy.", "Maybe you need something more challenging.", "Try this...", "Do it again, bug guy."]
+    ];
 
     game.interactiveObjects = [];
 
@@ -803,7 +809,7 @@ function AmoebaGame(viewPort) {
     game.checkConflicts = function (aggressor) {
         for (var i in this.interactiveObjects) {
             var obj = this.interactiveObjects[i];
-            if (obj !== aggressor) {
+            if (obj !== aggressor && obj.classification !== aggressor.classification) {
                 if (((obj.x - aggressor.x) * (obj.x - aggressor.x)) + ((obj.y - aggressor.y) * (obj.y - aggressor.y)) <= aggressor.radius * aggressor.radius) {
                     game.conflict(aggressor, obj);
                 }
@@ -813,9 +819,7 @@ function AmoebaGame(viewPort) {
 
     game.conflict = function(aggressor, defender) {
         // NOTE: Only MONSTERs and PLAYERs initiate conflict and are therefore the aggressor
-
         // TODO - maybe calculate a weight advantage for larger combatants
-
         if (defender.classification === Classification.RESOURCE) {
             aggressor.addEffect(defender.effect);
             this.removeObject(defender);            
@@ -830,11 +834,17 @@ function AmoebaGame(viewPort) {
             }
 
             if (loser.addEffect(DamageEffect(this, winner.damage))) {
-               winner.addEffect(HealingEffect(this, winner.damage));
-               if (loser.health <= 0) {
+                if (winner.classification == Classification.PLAYER) {
+                    scoreBoard.addScore(winner.damage);
+                }
+                else {
+                    scoreBoard.addScore(-winner.damage);    
+                }
+                winner.addEffect(HealingEffect(this, winner.damage));
+                if (loser.health <= 0) {
                     winner.addEffect(loser.effect);
                     this.removeObject(loser);
-               }
+                }
             }
         } 
     };
@@ -885,7 +895,42 @@ function AmoebaGame(viewPort) {
         // put this GC part in to avoid weird concurrent modification 
         game.collectGarbage();
 
+        if (monsters.length <= 0) {
+            game.nextRound();
+        }
+
         setTimeout(game.loop, 1000 / 50);
+    };
+
+    game.nextRound = function () {
+        if (currentMessage === undefined) {
+            switch(roundSetupStage) {
+                case 0:
+                    currentMessage = GameMessage(this, messages[0].random(), 3000);
+                    break;
+                case 1:
+                    currentMessage = GameMessage(this, '', 1500);
+                    break;
+                case 2:
+                    currentMessage = GameMessage(this, messages[1].random(), 4000);
+                    break;
+                case 3:
+                    amoeba.reset();
+                    maxMonsters += 1;
+                    for (var i = 0; i < maxMonsters; i++) {
+                        game.addObject(Bacterium(GAME_WIDTH - 100, GAME_HEIGHT - 100, this));
+                    }
+                    roundSetupStage = 0;
+                    return;  
+            }
+            game.addObject(currentMessage);
+            roundSetupStage += 1;
+
+        }
+        else if (!currentMessage.isActive()) {
+            this.removeObject(currentMessage);
+            currentMessage = undefined;
+        }
     };
     
     game.addObject = function(obj) {
@@ -921,7 +966,9 @@ function AmoebaGame(viewPort) {
 
         amoeba = Amoeba(100, 100, this);
         this.addObject(amoeba);
-        // this.addObject(Meter(amoeba));
+        scoreBoard = ScoreBoard(amoeba);
+        this.addObject(scoreBoard);
+
         this.addObject(Bacterium(GAME_WIDTH - 100, GAME_HEIGHT - 100, this));
 
         this.loop();
