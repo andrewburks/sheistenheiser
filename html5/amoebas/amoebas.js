@@ -6,13 +6,13 @@ Array.prototype.remove = function (obj) {
             this.splice(i, 1);
             break;
         }
-    };
+    }
 };
 
 Array.prototype.removeAll = function (objs) {
     for (var i = 0; i < objs.length; i++) {
         this.remove(objs[i]);
-    };
+    }
 };
 
 // An Array customization for this game. Sometimes I'll want to pick some random 
@@ -63,7 +63,7 @@ var BGCircleTheme = {
     shadowOffsetX: 0,
     shadowOffsetY: 0,
     shadowBlur: 5
-}
+};
 
 var AmoebaTheme = {
     fillStyle: 'rgba(0,255,128,0.5)',
@@ -123,7 +123,6 @@ function BGCircle(game) {
         randomInt(Math.min(GAME_WIDTH, GAME_HEIGHT)/2, Math.max(GAME_WIDTH, GAME_HEIGHT)/2), 
         game);
 
-    var alpha = randomFloat(0.02, 0.09);
     circle.theme = BGCircleTheme;
 
     circle.draw = function(canvas) {
@@ -159,7 +158,7 @@ function BGCircle(game) {
 // Effects are things that can happen to an object.  Get some health, lose some, grow spikes, get a shield...
 // Some effects can stack up and some cancel others out...
 function Effect(game) {
-    effect = {};
+    var effect = {};
     effect.name = '???';
     effect.canStack = true;
     effect.isEffectFilter = false;
@@ -220,7 +219,7 @@ function Effect(game) {
 }
 
 function HealingEffect(game, health) {
-    effect = Effect(game);
+    var effect = Effect(game);
     effect.health = (health === undefined) ? randomInt(3, 25) : health;
     effect.name = '+' + effect.health;
     effect.g = 200;
@@ -238,7 +237,7 @@ function HealingEffect(game, health) {
 }
 
 function DamageEffect(game, health) {
-    effect = HealingEffect(game);
+    var effect = HealingEffect(game);
     effect.health = (health === undefined) ? -randomInt(3, 25) : -Math.abs(health);
     effect.name = effect.health;
     effect.g = 0;
@@ -248,7 +247,7 @@ function DamageEffect(game, health) {
 }
 
 function ShieldEffect(game) {
-    effect = Effect(game);
+    var effect = Effect(game);
     effect.name = 'Shield!';
     effect.canStack = false;
     effect.isEffectFilter = true;
@@ -295,14 +294,14 @@ function ShieldEffect(game) {
 }
 
 function BlockedEffect (game, blockedEffect) {
-    effect = Effect(game);
+    var effect = Effect(game);
     effect.name = 'Blocked ' + blockedEffect.name;
     effect.isNullifying = true;
     return effect;
 }
 
 function SpikesEffect(game) {
-    effect = Effect(game);
+    var effect = Effect(game);
     effect.name = 'Spikes!';
     effect.canStack = true;
 
@@ -355,7 +354,7 @@ function SpikesEffect(game) {
 }
 
 function VictoriousEffect(game) {
-    effect = Effect(game);
+    var effect = Effect(game);
     effect.name = 'Victorious!';
     return effect;        
 }
@@ -456,7 +455,7 @@ function EffectedGameObj(x, y, radius, game) {
             if (this.activeEffects[i].isEffectFilter) {
                 effect = this.activeEffects[i].filterEffect(effect);
             }
-        };
+        }
 
         if (!effect.canStack) {
             for (var i = this.activeEffects.length - 1; i >= 0; i--) {
@@ -491,7 +490,7 @@ function EffectedGameObj(x, y, radius, game) {
                 expiredEffects.push(effect);
                 // console.log('Removed expired effect ' + effect.name + ' from ' + this.name);          
             }
-        };
+        }
         this.activeEffects.removeAll(expiredEffects);
     };
 
@@ -614,7 +613,7 @@ function Bacterium(x, y, game) {
     var maxMomentum = 300;
     var minMomentum = 100;
     var canAddMomentumX = true;
-    var canAddMomentumY = true
+    var canAddMomentumY = true;
     var nearest;
 
     bact.draw = function(canvas) {
@@ -714,7 +713,7 @@ function Bacterium(x, y, game) {
             this.canAddMomentumY = true;
         }
 
-        this.radius = 10 + this.health * .10;
+        this.radius = 10 + this.health * 0.10;
 
         game.checkConflicts(this);
 
