@@ -33,6 +33,7 @@ function sign(i) {
     return i === 0 ? 1 : i / Math.abs(i);
 }
 
+
 // Globals are generally a no no if I recall... but I honestly can't think of why they would 
 // be in this case... 
 var GAME_WIDTH;
@@ -46,6 +47,7 @@ var Classification = {
     MONSTER: 2,
     PLAYER: 3
 };
+
 
 // The idea here is to pull the colors, strokes, gradients, etc. out of the game logic and write
 // something that just applies a theme to a canvas.  This will allow things like effects to apply 
@@ -74,6 +76,7 @@ var BacteriumTheme = {
     strokeStyle: 'rgb(0,0,0)',
     lineWidth: 3
 };
+
 
 // This is the base class for game objects like the player's amoeba, the enemy bacteria, and the various 
 // resource motes that bounce around.
@@ -154,9 +157,13 @@ function BGCircle(game) {
 
 
 // Effects are things that can happen to an object.  Get some health, lose some, grow spikes, get a shield...
-function Effect(game) {
+// Some effects can stack up and some cancel others out...
+function Effect(game, name) {
     effect = {};
-    effect.name = '???';
+    effect.name = name === undefined ? '???' : name;
+    effect.canStack = true;
+    effect.isEffectFilter = false;
+    effect.isNullifying = false;
     effect.target;
 
     var step = 10;
@@ -169,11 +176,15 @@ function Effect(game) {
     effect.apply = function () {
     };
 
+    effect.filterEffect = function (effect) {
+        return effect;
+    };
+
     effect.setTarget = function (target) {
         this.target = target;
-    }
+    };
 
-    effect.draw = function (canvas) {
+    effect.textFade = function (canvas) {        
         var now = game.getTime();
         if (lastStep === undefined) {
             lastStep = game.getTime();
@@ -190,20 +201,27 @@ function Effect(game) {
         canvas.fillText(this.name, this.target.x, this.target.y - this.target.radius);
     };
 
+    effect.textFadeComplete = function() {
+        return step <= 0;
+    };
+
+    effect.draw = function (canvas) {
+        this.textFade(canvas);
+    };
+
     effect.isActive = function () {
         return step > 0;
-    }
+    };
 
     return effect;
 }
 
-function HealingEffect(game) {
-    effect = Effect(game);
+function HealingEffect(game, health) {
+    var health = (health === undefined) ? randomInt(3, 25) : health;
 
-    effect.health = randomInt(3, 25);
+    effect = Effect(game, '+' + health);
+    effect.health = health;
     var applied = false;
-
-    effect.name = '+' + effect.health;
     effect.g = 200;
 
     effect.apply = function () {
@@ -216,10 +234,10 @@ function HealingEffect(game) {
     return effect;
 }
 
-function HarmingEffect(game) {
+function DamageEffect(game, health) {
     effect = HealingEffect(game);
 
-    effect.health = -randomInt(3, 25);
+    effect.health = (health === undefined) ? -randomInt(3, 25) : -Math.abs(health);
     effect.name = effect.health;
     effect.g = 0;
     effect.r = 200;
@@ -230,12 +248,102 @@ function HarmingEffect(game) {
 function ShieldEffect(game) {
     effect = Effect(game);
     effect.name = 'Shield!';
+    effect.canStack = false;
+    effect.isEffectFilter = true;
+
+    effect.b = 255;
+
+    var expires = game.getTime() + 9000;
+
+    effect.isActive = function () {
+        return expires > game.getTime();
+    };
+
+    effect.apply = function () {
+    };
+
+    effect.filterEffect = function (effect) {
+        // Hackish... but serves the purpose...
+        if (effect.name.toString().lastIndexOf('-', 0) === 0) {
+            return BlockedEffect(game, effect);
+        }
+        return effect;
+    };    
+
+    effect.draw = function (canvas) {
+        if (!this.textFadeComplete()) {
+            this.textFade(canvas);
+        }
+
+        canvas.beginPath();
+        canvas.lineWidth = 2;
+        canvas.strokeStyle = 'rgba(0,0,255,0.5)';
+        canvas.shadowColor = 'rgba(0,0,255, 1.0)';
+        canvas.shadowOffsetX = 0;
+        canvas.shadowOffsetY = 0;
+        canvas.shadowBlur = 5;
+
+        canvas.arc(this.target.x, this.target.y, this.target.radius + 5, 0, TWO_PI, true);
+
+        canvas.stroke();
+        canvas.closePath();
+    };
+
     return effect;    
+}
+
+function BlockedEffect (game, effect) {
+    effect = Effect(game);
+    effect.name = 'Blocked ' + effect.name;
+    effect.isNullifying = true;
+    return effect;
 }
 
 function SpikesEffect(game) {
     effect = Effect(game);
     effect.name = 'Spikes!';
+    effect.canStack = true;
+
+    var expires = game.getTime() + 7000;
+    var prevDamage;
+
+    effect.setTarget = function (target) {
+        this.target = target;
+        this.prevDamage = target.damage;
+        target.damage *= 4;
+    };
+
+    effect.isActive = function () {
+        if (expires <= game.getTime()) {
+            this.target.damage = prevDamage;
+            return false;
+        }
+        return true;
+    };
+
+    effect.draw = function (canvas) {
+        if (!this.textFadeComplete()) {
+            this.textFade(canvas);
+        }
+
+        var circumference = TWO_PI * this.target.radius;
+        var spikeCount = circumference / 10;
+        var thetaInc = 2.0 / spikeCount;
+        for (var theta = 0.0; theta < TWO_PI; theta += thetaInc) {
+            canvas.beginPath();
+            canvas.moveTo(
+                this.target.x + this.target.radius * Math.cos(theta),
+                this.target.y + this.target.radius * Math.sin(theta)
+                );
+            canvas.lineTo(
+                this.target.x + (this.target.radius + 7) * Math.cos(theta),
+                this.target.y + (this.target.radius + 7) * Math.sin(theta)
+                );
+            canvas.stroke();
+            canvas.closePath();
+        }
+    };
+
     return effect;    
 }
 
@@ -290,7 +398,7 @@ function Mote(x, y, game, color, effect) {
 function MoteFactory() {
     var factory = {};
     var effects = [
-            ['rgb(255,   0,   0)', HarmingEffect],
+            ['rgb(255,   0,   0)', DamageEffect],
             ['rgb(0,   255,   0)', HealingEffect],
             ['rgb(0,     0, 255)', ShieldEffect],
             ['rgb(255, 255, 255)', SpikesEffect]
@@ -331,35 +439,53 @@ function drawEye(cgo, canvas, direction) {
     canvas.stroke();
 }
 
-// Shared logic for being affected by effects for use in both amoebas and bateriums
+// Shared logic for being affected by effects for use in both amoebas and bacteriums
 function EffectedGameObj(x, y, radius, game) {
     var sgo = GameObj(x, y, radius, game);
     sgo.activeEffects = [];
 
     sgo.addEffect = function(effect) {
+        for (var i = this.activeEffects.length - 1; i >= 0; i--) {
+            if (this.activeEffects[i].isEffectFilter) {
+                effect = this.activeEffects[i].filterEffect(effect);
+            }
+        };
+
+        if (!effect.canStack) {
+            for (var i = this.activeEffects.length - 1; i >= 0; i--) {
+                if (this.activeEffects[i].name === effect.name) {
+                    this.activeEffects.remove(this.activeEffects[i]);
+                    break;
+                }
+            }
+        }
+
         effect.setTarget(this);
         this.activeEffects.push(effect);
+        // console.log('Added effect ' + effect.name + ' to ' + this.name);
+        return !effect.isNullifying;
     };
 
     sgo.drawEffects = function (canvas) {
         for (var i = 0; i < this.activeEffects.length; i++) {
             this.activeEffects[i].draw(canvas);
         }
-    }
+    };
 
     sgo.calcEffects = function () {
         var expiredEffects = [];
         for (var i = 0; i < this.activeEffects.length; i++) {
-            effect = this.activeEffects[i];
+            var effect = this.activeEffects[i];
             if (effect.isActive()) {
                 effect.apply();
             }
             else {
                 expiredEffects.push(effect);
+                // console.log('Removed expired effect ' + effect.name + ' from ' + this.name);          
             }
         };
         this.activeEffects.removeAll(expiredEffects);
-    }
+    };
 
     return sgo;
 }
@@ -477,13 +603,13 @@ function Bacterium(x, y, game) {
     bact.draw = function(canvas) {
         canvas.save();
 
-        // DEBUGGING...
-        if (nearest !== undefined) {
-            canvas.beginPath();
-            canvas.arc(nearest.x, nearest.y, nearest.radius + 10, 0, TWO_PI, true);
-            canvas.stroke();
-            canvas.closePath();
-        }
+        // DEBUG targeting...
+        // if (nearest !== undefined) {
+        //     canvas.beginPath();
+        //     canvas.arc(nearest.x, nearest.y, nearest.radius + 10, 0, TWO_PI, true);
+        //     canvas.stroke();
+        //     canvas.closePath();
+        // }
 
         this.applyTheme(canvas);
         canvas.beginPath();
@@ -581,70 +707,70 @@ function Bacterium(x, y, game) {
     return bact;
 }
 
-function Meter(target) {
-    var radius = 15;
-    var meter = GameObj(radius + 3, GAME_HEIGHT - (3 + radius),  radius, undefined);
+// function Meter(target) {
+//     var radius = 15;
+//     var meter = GameObj(radius + 3, GAME_HEIGHT - (3 + radius),  radius, undefined);
 
-    var healthMeterWidth = 200;
-    var percentHealth = 100;
-    var meterColor = 'rgba(0,255,96,0.4)';
+//     var healthMeterWidth = 200;
+//     var percentHealth = 100;
+//     var meterColor = 'rgba(0,255,96,0.4)';
 
-    meter.calc = function() {
-        percentHealth = target.health / target.maxHealth;
+//     meter.calc = function() {
+//         percentHealth = target.health / target.maxHealth;
 
-        if (percentHealth > 0.66) {
-            meterColor = 'rgba(0,255,96,0.4)';        
-        }
-        else if(0.33 <= percentHealth && percentHealth <= 0.66) {
-            meterColor = 'rgba(255,255,0,0.4)';    
-        }
-        else {
-            meterColor = 'rgba(255,0,0,0.4)';
-        }
-    };
+//         if (percentHealth > 0.66) {
+//             meterColor = 'rgba(0,255,96,0.4)';        
+//         }
+//         else if(0.33 <= percentHealth && percentHealth <= 0.66) {
+//             meterColor = 'rgba(255,255,0,0.4)';    
+//         }
+//         else {
+//             meterColor = 'rgba(255,0,0,0.4)';
+//         }
+//     };
 
-    meter.draw = function(canvas) {
-        canvas.save();
-        canvas.lineWidth = 2;
-        canvas.fillStyle = 'rgba(255,255,255,0.3)';
-        canvas.beginPath();
-        canvas.moveTo(this.x + radius, this.y);
-        canvas.lineTo(this.x+ (radius/2) + healthMeterWidth, this.y);
-        // canvas.arc(this.x + healthMeterWidth, this.y + (radius/2), this.radius/2, Math.PI/2, 3*Math.PI/2, true);
-        canvas.lineTo(this.x + (radius/2) + healthMeterWidth, this.y + radius);
-        canvas.lineTo(this.x,  this.y + radius);
+//     meter.draw = function(canvas) {
+//         canvas.save();
+//         canvas.lineWidth = 2;
+//         canvas.fillStyle = 'rgba(255,255,255,0.3)';
+//         canvas.beginPath();
+//         canvas.moveTo(this.x + radius, this.y);
+//         canvas.lineTo(this.x+ (radius/2) + healthMeterWidth, this.y);
+//         // canvas.arc(this.x + healthMeterWidth, this.y + (radius/2), this.radius/2, Math.PI/2, 3*Math.PI/2, true);
+//         canvas.lineTo(this.x + (radius/2) + healthMeterWidth, this.y + radius);
+//         canvas.lineTo(this.x,  this.y + radius);
         
-        canvas.fill();
-        canvas.stroke();
+//         canvas.fill();
+//         canvas.stroke();
 
-        canvas.beginPath();
-        canvas.moveTo(this.x + (radius/2), this.y + (radius/2));
-        canvas.lineTo(this.x + (radius/2) + (percentHealth * healthMeterWidth), this.y + (radius/2));
-        canvas.lineWidth = radius - 4;
-        canvas.strokeStyle = meterColor;
-        canvas.stroke();
+//         canvas.beginPath();
+//         canvas.moveTo(this.x + (radius/2), this.y + (radius/2));
+//         canvas.lineTo(this.x + (radius/2) + (percentHealth * healthMeterWidth), this.y + (radius/2));
+//         canvas.lineWidth = radius - 4;
+//         canvas.strokeStyle = meterColor;
+//         canvas.stroke();
 
-        canvas.lineWidth = 2;
-        canvas.fillStyle = target.color;
-        canvas.strokeStyle = target.strokeStyle;
-        canvas.beginPath();
-        canvas.arc(this.x, this.y, this.radius, 0, TWO_PI, true);
-        canvas.closePath();
-        canvas.fill();
-        canvas.stroke();
+//         canvas.lineWidth = 2;
+//         canvas.fillStyle = target.color;
+//         canvas.strokeStyle = target.strokeStyle;
+//         canvas.beginPath();
+//         canvas.arc(this.x, this.y, this.radius, 0, TWO_PI, true);
+//         canvas.closePath();
+//         canvas.fill();
+//         canvas.stroke();
 
-        canvas.font = '12px verdana, sans-serif';
-        canvas.textAlign = 'start';
-        canvas.textBaseline = 'middle';
-        canvas.fillStyle = 'rgba(0,0,0,.9)';
-        canvas.fillText(target.health + '%', this.x + radius + 5, this.y + (radius/2));
+//         canvas.font = '12px verdana, sans-serif';
+//         canvas.textAlign = 'start';
+//         canvas.textBaseline = 'middle';
+//         canvas.fillStyle = 'rgba(0,0,0,.9)';
+//         canvas.fillText(target.health + '%', this.x + radius + 5, this.y + (radius/2));
 
-        drawEye(this, canvas, 1.4);
-        canvas.restore();
-    };
+//         drawEye(this, canvas, 1.4);
+//         canvas.restore();
+//     };
 
-    return meter;
-}
+//     return meter;
+// }
 
 function AmoebaGame(viewPort) {
     var game = {};
@@ -653,6 +779,7 @@ function AmoebaGame(viewPort) {
     GAME_HEIGHT = viewPort.height;
 
     var amoeba;
+    var monsters = [];
     var sprites = [];
     var garbage = [];
     var moteFactory = MoteFactory(game);
@@ -687,7 +814,7 @@ function AmoebaGame(viewPort) {
     game.conflict = function(aggressor, defender) {
         // NOTE: Only MONSTERs and PLAYERs initiate conflict and are therefore the aggressor
 
-        // TODO - calculate a weight advantage for larger combatants
+        // TODO - maybe calculate a weight advantage for larger combatants
 
         if (defender.classification === Classification.RESOURCE) {
             aggressor.addEffect(defender.effect);
@@ -702,14 +829,13 @@ function AmoebaGame(viewPort) {
                 loser = aggressor;
             }
 
-            var win = HealingEffect(this);
-            win.health = winner.damage;
-
-            var loss = HarmingEffect(this);
-            loss.health = -winner.damage;
-
-            winner.addEffect(win);
-            loser.addEffect(loss);
+            if (loser.addEffect(DamageEffect(this, winner.damage))) {
+               winner.addEffect(HealingEffect(this, winner.damage));
+               if (loser.health <= 0) {
+                    winner.addEffect(loser.effect);
+                    this.removeObject(loser);
+               }
+            }
         } 
     };
 
@@ -743,7 +869,7 @@ function AmoebaGame(viewPort) {
         // Add some resources...
         if (nextMoteTime < game.getTime()) {
             game.addObject(moteFactory.createMote(game));
-            nextMoteTime = game.getTime() + randomInt(7, 17) * 500;
+            nextMoteTime = game.getTime() + randomInt(4, 17) * 500;
         }
 
         // Clears the canvas
@@ -767,6 +893,9 @@ function AmoebaGame(viewPort) {
         if (obj.classification > Classification.BACKGROUND) {
             this.interactiveObjects.push(obj);
         }
+        if (obj.classification == Classification.MONSTER) {
+            monsters.push(obj);
+        }
     };
 
     game.removeObject = function(obj) {
@@ -779,7 +908,8 @@ function AmoebaGame(viewPort) {
             sprites.remove(obj);
             if (obj.classification > Classification.BACKGROUND) {
                 this.interactiveObjects.remove(obj);
-            }            
+                monsters.remove(obj);
+            }        
         }
         garbage = [];
     };
