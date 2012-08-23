@@ -407,7 +407,7 @@ function MoteFactory() {
             ['rgb(255,   0,   0)', DamageEffect],
             ['rgb(0,   255,   0)', HealingEffect],
             ['rgb(0,     0, 255)', ShieldEffect],
-            ['rgb(255, 255, 255)', SpikesEffect]
+            ['rgb(0,     0,   0)', SpikesEffect]
         ];
 
     factory.createMote = function(game) {
@@ -427,6 +427,8 @@ function MoteFactory() {
 function drawEye(cgo, canvas, direction) {
     var eX = cgo.x + Math.round(Math.sin(direction) * 10);
     var eY = cgo.y + Math.round(Math.cos(direction) * 10);
+    var pX = cgo.x + Math.round(Math.sin(direction) * 11);
+    var pY = cgo.y + Math.round(Math.cos(direction) * 11);
 
     canvas.fillStyle = 'rgba(255,255,255,0.9)';
     canvas.strokeStyle = 'rgba(0,0,0,.5)';
@@ -439,11 +441,12 @@ function drawEye(cgo, canvas, direction) {
 
     canvas.fillStyle = 'rgba(0,0,0,0.9)';
     canvas.beginPath();
-    canvas.arc(eX, eY, cgo.radius/6, 0, TWO_PI, true);
+    canvas.arc(pX, pY, cgo.radius/6, 0, TWO_PI, true);
     canvas.closePath();
     canvas.fill();
     canvas.stroke();
 }
+
 
 // Shared logic for being affected by effects for use in both amoebas and bacteriums
 function EffectedGameObj(x, y, radius, game) {
@@ -601,7 +604,6 @@ function Amoeba(x, y, game) {
 function Bacterium(x, y, game) {
     var bact = EffectedGameObj(x, y, 20, game);
     bact.name = 'Bacterium';
-    bact.maxHealth = 150;
     bact.health = 150;
     bact.damage = 7;
     bact.classification = Classification.MONSTER;
@@ -750,23 +752,54 @@ function ScoreBoard (player, game) {
 function GameMessage(game, text, duration) {
     var message = GameObj(GAME_WIDTH/2, GAME_HEIGHT/2, 0, game);
 
-    var expires = game.getTime() + duration;
-
-    message.isActive = function() {
-        return game.getTime() > expires;
-    };
+    var expires;
+    var step = 10;
+    var lastStep;
 
     message.draw = function (canvas) {
+        var now = game.getTime();
+        if (now > expires) {
+            if (lastStep === undefined) {
+                lastStep = game.getTime();
+            }
+            else if (now - lastStep > 100) {
+                step -= 1;
+                lastStep = now;
+            }
+        }
+
         canvas.font = 'bold italic 24px verdana, sans-serif';
-        canvas.fillStyle = 'rgba(0,0,0,0.9)';
+        canvas.fillStyle = 'rgba(0,0,0,' + (1.0 * step / 10) + ')';
         canvas.textAlign = 'center';
         canvas.textBaseline = 'middle';
         canvas.fillText(text, this.x, this.y);        
     };   
 
+    message.doIt = function () {
+        if (expires === undefined) {
+            game.addObject(this);
+            expires = game.getTime() + duration;
+        }
+        if (step <= 0) {
+            game.removeObject(this);
+            return true;
+        }
+        return false;
+    };
+
     return message;
 }
 
+function DefferredCall(fn) {
+    var defferred = {};
+
+    defferred.doIt = function () {
+        fn();
+        return true;
+    };
+
+    return defferred; 
+}
 
 function AmoebaGame(viewPort) {
     var game = {};
@@ -783,12 +816,12 @@ function AmoebaGame(viewPort) {
     var moteFactory = MoteFactory(game);
     var nextMoteTime = 0;
     var currentTime;
+    var startingNewRound = false;
+    var serialTaskQueue = [];
 
-    var roundSetupStage = 0;
-    var currentMessage;
     var messages = [
-        ["Hmmm...", "Brilliant!", "Uhh... Okay...", "Fine."],
-        ["I guess that was too easy.", "Maybe you need something more challenging.", "Try this...", "Do it again, bug guy."]
+        ["Superb!", "Brilliant!", "Fantastic!", "Marvelous!", "Splendid!", "Magnificent!", "Stellar!"],
+        ["Perhaps that was too easy.", "Maybe you need something more challenging.", "You don't suck as bad as Bowling said.", "Do it again, bug guy."]
     ];
 
     game.interactiveObjects = [];
@@ -843,6 +876,10 @@ function AmoebaGame(viewPort) {
                 if (loser.health <= 0) {
                     winner.addEffect(loser.effect);
                     this.removeObject(loser);
+
+                    if (loser === amoeba) {
+                        amoeba = undefined;
+                    }
                 }
             }
         } 
@@ -883,8 +920,44 @@ function AmoebaGame(viewPort) {
 
         // Clears the canvas
         game.clear();
+
+        if (monsters.length <= 0 && !startingNewRound) {
+            startingNewRound = true;
+            // ack they won one
+            serialTaskQueue.push(GameMessage(game, messages[0].random(), 1500));
+            // talk a little smack
+            serialTaskQueue.push(GameMessage(game, messages[1].random(), 2500));
+            // make more monsters
+            serialTaskQueue.push(
+                DefferredCall(
+                    function() {
+                        amoeba.reset();
+                        maxMonsters += 1;
+                        for (var i = 0; i < maxMonsters; i++) {
+                            game.addObject(Bacterium(randomInt(100, GAME_WIDTH - 100), randomInt(100, GAME_HEIGHT - 100), game));
+                        }
+                        startingNewRound = false;
+                    })
+            );
+        }
+
+        if (amoeba === undefined) {
+            // ack they lost
+            serialTaskQueue.push(GameMessage(game, "Way to go...", 1500));
+            // talk a little smack
+            serialTaskQueue.push(GameMessage(game, "I'd slow clap for you if I had hands...", 2500));
+            serialTaskQueue.push(GameMessage(game, "Maybe you'll do better next time.", 2500));
+            amoeba = null;
+        }
+
+        // Give some cpu to the serial tasks
+        if (serialTaskQueue.length > 0) {
+            if (serialTaskQueue[0].doIt()) {
+                serialTaskQueue.shift();
+            }
+        }
         
-        // Redraw all the sprites on the newly cleared canvas
+        // Redraw all the sprites on the canvas
         for (var i = 0; i < sprites.length; i++) {
             sprites[i].draw(canvas);
         }
@@ -894,44 +967,9 @@ function AmoebaGame(viewPort) {
         // put this GC part in to avoid weird concurrent modification 
         game.collectGarbage();
 
-        if (monsters.length <= 0) {
-            game.nextRound();
-        }
-
         setTimeout(game.loop, 1000 / 50);
     };
 
-    game.nextRound = function () {
-        if (currentMessage === undefined) {
-            switch(roundSetupStage) {
-                case 0:
-                    currentMessage = GameMessage(this, messages[0].random(), 3000);
-                    break;
-                case 1:
-                    currentMessage = GameMessage(this, '', 1500);
-                    break;
-                case 2:
-                    currentMessage = GameMessage(this, messages[1].random(), 4000);
-                    break;
-                case 3:
-                    amoeba.reset();
-                    maxMonsters += 1;
-                    for (var i = 0; i < maxMonsters; i++) {
-                        game.addObject(Bacterium(GAME_WIDTH - 100, GAME_HEIGHT - 100, this));
-                    }
-                    roundSetupStage = 0;
-                    return;  
-            }
-            game.addObject(currentMessage);
-            roundSetupStage += 1;
-
-        }
-        else if (!currentMessage.isActive()) {
-            this.removeObject(currentMessage);
-            currentMessage = undefined;
-        }
-    };
-    
     game.addObject = function(obj) {
         sprites.push(obj);
         if (obj.classification > Classification.BACKGROUND) {
@@ -968,7 +1006,7 @@ function AmoebaGame(viewPort) {
         scoreBoard = ScoreBoard(amoeba);
         this.addObject(scoreBoard);
 
-        this.addObject(Bacterium(GAME_WIDTH - 100, GAME_HEIGHT - 100, this));
+        this.addObject(Bacterium(randomInt(100, GAME_WIDTH - 100), randomInt(100, GAME_HEIGHT - 100), this));
 
         this.loop();
     };
