@@ -21,6 +21,8 @@ Array.prototype.random = function (obj) {
     return this[Math.floor(this.length * Math.random())];
 };
 
+
+
 function randomInt(lowerBound, upperBound) {
     return Math.floor(lowerBound + (1 + upperBound - lowerBound) * Math.random()); 
 }
@@ -100,7 +102,7 @@ function GameObj(x, y, radius, game) {
         this.health += amt;
     };
 
-    obj.calc = function () {
+    obj.update = function () {
     };
 
     obj.draw = function (canvas) {
@@ -135,7 +137,7 @@ function BGCircle(game) {
         canvas.restore();
     };
 
-    circle.calc = function() {
+    circle.update = function() {
         if (game.isXinbounds(this.x + this.mX)) {
             this.x += this.mX;
         }
@@ -381,7 +383,7 @@ function Mote(x, y, game, color, effect) {
         canvas.restore();
     };
 
-    mote.calc = function() {
+    mote.update = function() {
         if (game.isXinbounds(mote.x + mote.mX)) {
             mote.x += mote.mX;
         }
@@ -482,7 +484,7 @@ function EffectedGameObj(x, y, radius, game) {
         }
     };
 
-    sgo.calcEffects = function () {
+    sgo.updateEffects = function () {
         var expiredEffects = [];
         for (var i = 0; i < this.activeEffects.length; i++) {
             var effect = this.activeEffects[i];
@@ -561,7 +563,7 @@ function Amoeba(x, y, game) {
         canvas.restore();
     };
 
-    amoeba.calc = function() {
+    amoeba.update = function() {
         for (var key in this.momentumMods) {
             this.momentumMods[key](this);
         }
@@ -594,7 +596,7 @@ function Amoeba(x, y, game) {
 
         game.checkConflicts(this);
 
-        this.calcEffects();
+        this.updateEffects();
     };
 
     return amoeba;
@@ -643,7 +645,7 @@ function Bacterium(x, y, game) {
         canvas.restore();
     };
 
-    bact.calc = function() {
+    bact.update = function() {
         var minDistance;
         nearest = undefined;
         for (var x in game.interactiveObjects) {
@@ -719,7 +721,7 @@ function Bacterium(x, y, game) {
 
         game.checkConflicts(this);
 
-        this.calcEffects();
+        this.updateEffects();
     };
 
     return bact;
@@ -746,6 +748,35 @@ function ScoreBoard (player, game) {
     };
 
     return board;
+}
+
+
+function FPSCounter(game) {
+    var counter = GameObj(3, GAME_HEIGHT - 3, 1, game);
+
+    var lastCalculated = game.getTime();
+    var frameCount = 0;
+    var frameRate = 0;
+
+    counter.draw = function (canvas) {
+        var now = game.getTime();
+        var elapsedTime = now / 1000 - lastCalculated / 1000; 
+        if (elapsedTime > 1.0) {
+            frameRate = frameCount / elapsedTime;
+            frameCount = 0;
+            lastCalculated = now;
+        }
+        frameCount++;
+
+        canvas.font = 'bold italic 16px verdana, sans-serif';
+        canvas.fillStyle = 'rgba(0,0,0,0.7)';
+        canvas.textAlign = 'left';
+        canvas.textBaseline = 'bottom';
+
+        canvas.fillText('FPS: ' + frameRate.toFixed(2), this.x, this.y);
+    };
+
+    return counter;
 }
 
 
@@ -815,7 +846,7 @@ function AmoebaGame(viewPort) {
     var garbage = [];
     var moteFactory = MoteFactory(game);
     var nextMoteTime = 0;
-    var currentTime;
+    var currentTime = new Date().getTime();
     var startingNewRound = false;
     var serialTaskQueue = [];
 
@@ -904,12 +935,14 @@ function AmoebaGame(viewPort) {
     };
     
     game.loop = function() {
+        requestAnimationFrame(game.loop);
+
         // Update game time
         currentTime = new Date().getTime();
 
         // Make all the sprites calculations
         for (var i = 0; i < sprites.length; i++) {
-            sprites[i].calc();
+            sprites[i].update();
         }
 
         // Add some resources...
@@ -966,8 +999,6 @@ function AmoebaGame(viewPort) {
         // through it... I presumed it was a concurrent modification style snafu, so I 
         // put this GC part in to avoid weird concurrent modification 
         game.collectGarbage();
-
-        setTimeout(game.loop, 1000 / 50);
     };
 
     game.addObject = function(obj) {
@@ -1003,8 +1034,12 @@ function AmoebaGame(viewPort) {
 
         amoeba = Amoeba(100, 100, this);
         this.addObject(amoeba);
-        scoreBoard = ScoreBoard(amoeba);
+        
+        scoreBoard = ScoreBoard(amoeba, this);
         this.addObject(scoreBoard);
+
+        fpsCounter = FPSCounter(this);
+        this.addObject(fpsCounter);
 
         this.addObject(Bacterium(randomInt(100, GAME_WIDTH - 100), randomInt(100, GAME_HEIGHT - 100), this));
 
@@ -1016,6 +1051,18 @@ function AmoebaGame(viewPort) {
 
     return game;
 }
+
+// Got this from http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+var requestAnimationFrame = (function() {
+    return window.requestAnimationFrame    ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame    ||
+        window.oRequestAnimationFrame      ||
+        window.msRequestAnimationFrame     ||
+        function(callback) {
+            window.setTimeout(callback, 1000 / 60);
+        };
+})();
 
 window.onload = function() {
     AmoebaGame(document.getElementById("viewPort")).start();
