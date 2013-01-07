@@ -2,29 +2,26 @@
 
 from common import timed_func, proper_divisors
 
-
-def abundant_nums(limit):
-    for n in xrange(12, limit):
+def abundant_numbers(limit):
+    abundant_nums = []
+    for n in xrange(1, limit):
         if sum(proper_divisors(n)) > n:
-            yield n
-
-def perfect_nums(limit):
-    for n in xrange(3, limit):
-        if sum(proper_divisors(n)) == n:
-            yield n
+            abundant_nums.append(n)
+    return abundant_nums
 
 def non_abundant_sums(limit):
-    sieve = range(1, 28124)
-    
-    
-
-    pass
+    sieve = range(1, limit)
+    abundant_nums = abundant_numbers(limit)
+    for a1 in abundant_nums:
+        for a2 in abundant_nums:
+            abundant_sum = a1 + a2 - 1
+            if abundant_sum < len(sieve):
+                sieve[abundant_sum] = 0
+    return sieve
 
 @timed_func
 def problem23():
-    return sum((i for i in xrange(1, 28124) if sum(divisors(i)[:-1]) > i))
+    return sum(non_abundant_sums(28123))
 
 if __name__ == '__main__':
-    #print problem23()
-    print list(abundant_nums(100))
-    print list(perfect_nums(20000))
+    print problem23()
